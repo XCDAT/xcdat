@@ -799,6 +799,7 @@ class TemporalAccessor:
         keep_weights: bool = False,
         reference_period: Optional[Tuple[str, str]] = None,
         season_config: SeasonConfigInput = DEFAULT_SEASON_CONFIG,
+        skipna=None,
     ) -> xr.Dataset:
         """Averages a data variable based on the averaging mode and frequency."""
         ds = self._dataset.copy()
@@ -808,9 +809,9 @@ class TemporalAccessor:
         ds = self._preprocess_dataset(ds)
 
         if self._mode == "average":
-            dv_avg = self._average(ds, data_var)
+            dv_avg = self._average(ds, data_var, skipna=skipna)
         elif self._mode in ["group_average", "climatology", "departures"]:
-            dv_avg = self._group_average(ds, data_var)
+            dv_avg = self._group_average(ds, data_var, skipna=skipna)
 
         # The original time dimension is dropped from the dataset because
         # it becomes obsolete after the data variable is averaged. When the
@@ -1123,7 +1124,7 @@ class TemporalAccessor:
         ds = ds.sel(**{self.dim: ~((ds.time.dt.month == 2) & (ds.time.dt.day == 29))})
         return ds
 
-    def _average(self, ds: xr.Dataset, data_var: str) -> xr.DataArray:
+    def _average(self, ds: xr.Dataset, data_var: str, skipna=None) -> xr.DataArray:
         """Averages a data variable with the time dimension removed.
 
         Parameters
@@ -1145,15 +1146,17 @@ class TemporalAccessor:
                 time_bounds = ds.bounds.get_bounds("T", var_key=data_var)
                 self._weights = self._get_weights(time_bounds)
 
-                dv = dv.weighted(self._weights).mean(dim=self.dim)
+                dv = dv.weighted(self._weights).mean(dim=self.dim, skipna=skipna)  # type: ignore
             else:
-                dv = dv.mean(dim=self.dim)
+                dv = dv.mean(dim=self.dim, skipna=skipna)  # type: ignore
 
         dv = self._add_operation_attrs(dv)
 
         return dv
 
-    def _group_average(self, ds: xr.Dataset, data_var: str) -> xr.DataArray:
+    def _group_average(
+        self, ds: xr.Dataset, data_var: str, skipna=None
+    ) -> xr.DataArray:
         """Averages a data variable by time group.
 
         Parameters
@@ -1193,12 +1196,14 @@ class TemporalAccessor:
             # WA = sum(data*weights) / sum(weights). The denominator must be
             # included to take into account zero weight for missing data.
             with xr.set_options(keep_attrs=True):
-                dv = self._group_data(dv).sum() / self._group_data(weights).sum()
+                dv = self._group_data(dv).sum(skipna=skipna) / self._group_data(
+                    weights
+                ).sum(skipna=skipna)
 
             # Restore the data variable's name.
             dv.name = data_var
         else:
-            dv = self._group_data(dv).mean()
+            dv = self._group_data(dv).mean(skipna=skipna)
 
         # After grouping and aggregating, the grouped time dimension's
         # attributes are removed. Xarray's `keep_attrs=True` option only keeps
