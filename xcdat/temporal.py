@@ -155,7 +155,13 @@ class TemporalAccessor:
     def __init__(self, dataset: xr.Dataset):
         self._dataset: xr.Dataset = dataset
 
-    def average(self, data_var: str, weighted: bool = True, keep_weights: bool = False):
+    def average(
+        self,
+        data_var: str,
+        weighted: bool = True,
+        keep_weights: bool = False,
+        skipna=None,
+    ):
         """
         Returns a Dataset with the average of a data variable and the time
         dimension removed.
@@ -231,7 +237,12 @@ class TemporalAccessor:
         freq = _infer_freq(self._dataset[self.dim])
 
         return self._averager(
-            data_var, "average", freq, weighted=weighted, keep_weights=keep_weights
+            data_var,
+            "average",
+            freq,
+            weighted=weighted,
+            keep_weights=keep_weights,
+            skipna=skipna,
         )
 
     def group_average(
