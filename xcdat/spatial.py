@@ -76,7 +76,7 @@ class SpatialAccessor:
         keep_weights: bool = False,
         lat_bounds: Optional[RegionAxisBounds] = None,
         lon_bounds: Optional[RegionAxisBounds] = None,
-        skipna=None,
+        skipna: bool | None = None,
     ) -> xr.Dataset:
         """
         Calculates the spatial average for a rectilinear grid over an optionally
@@ -126,6 +126,11 @@ class SpatialAccessor:
             ignored if ``weights`` are supplied. The lower bound can be larger
             than the upper bound (e.g., across the prime meridian, dateline), by
             default None.
+        skipna : bool or None, optional
+            If True, skip missing values (as marked by NaN). By default, only
+            skips missing values for float dtypes; other dtypes either do not
+            have a sentinel missing value (int) or ``skipna=True`` has not been
+            implemented (object, datetime64 or timedelta64).
 
         Returns
         -------
@@ -706,8 +711,8 @@ class SpatialAccessor:
         self,
         data_var: xr.DataArray,
         axis: List[SpatialAxis] | Tuple[SpatialAxis, ...],
-        skipna=None,
-    ):
+        skipna: bool | None = None,
+    ) -> xr.DataArray:
         """Perform a weighted average of a data variable.
 
         This method assumes all specified keys in ``axis`` exists in the data
@@ -725,6 +730,11 @@ class SpatialAccessor:
             Data variable inside a Dataset.
         axis : List[SpatialAxis] | Tuple[SpatialAxis, ...]
             List of axis dimensions to average over.
+        skipna : bool or None, optional
+            If True, skip missing values (as marked by NaN). By default, only
+            skips missing values for float dtypes; other dtypes either do not
+            have a sentinel missing value (int) or ``skipna=True`` has not been
+            implemented (object, datetime64 or timedelta64).
 
         Returns
         -------
