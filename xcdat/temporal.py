@@ -815,7 +815,7 @@ class TemporalAccessor:
         keep_weights: bool = False,
         reference_period: Optional[Tuple[str, str]] = None,
         season_config: SeasonConfigInput = DEFAULT_SEASON_CONFIG,
-        skipna: bool | None = None,
+        skipna: Union[bool, None] = None,
     ) -> xr.Dataset:
         """Averages a data variable based on the averaging mode and frequency."""
         ds = self._dataset.copy()
@@ -1141,7 +1141,7 @@ class TemporalAccessor:
         return ds
 
     def _average(
-        self, ds: xr.Dataset, data_var: str, skipna: bool | None = None
+        self, ds: xr.Dataset, data_var: str, skipna: Union[bool, None] = None
     ) -> xr.DataArray:
         """Averages a data variable with the time dimension removed.
 
