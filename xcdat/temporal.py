@@ -160,7 +160,7 @@ class TemporalAccessor:
         data_var: str,
         weighted: bool = True,
         keep_weights: bool = False,
-        skipna: bool | None = None,
+        skipna: Union[bool, None] = None,
     ):
         """
         Returns a Dataset with the average of a data variable and the time
@@ -1178,7 +1178,7 @@ class TemporalAccessor:
         return dv
 
     def _group_average(
-        self, ds: xr.Dataset, data_var: str, skipna: bool | None = None
+        self, ds: xr.Dataset, data_var: str, skipna: Union[bool, None] = None
     ) -> xr.DataArray:
         """Averages a data variable by time group.
 
