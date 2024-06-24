@@ -520,6 +520,57 @@ class TestGroupAverage:
         assert result.ts.attrs == expected.ts.attrs
         assert result.time.attrs == expected.time.attrs
 
+    def test_weighted_annual_averages_and_skipna(self):
+        ds = self.ds.copy(deep=True)
+        ds.ts[0] = np.nan
+
+        result = ds.temporal.group_average("ts", "year", skipna=True)
+        expected = ds.copy()
+        expected = expected.drop_dims("time")
+        expected["ts"] = xr.DataArray(
+            name="ts",
+            data=np.array([[[1]], [[2.0]]]),
+            coords={
+                "lat": expected.lat,
+                "lon": expected.lon,
+                "time": xr.DataArray(
+                    data=np.array(
+                        [
+                            cftime.DatetimeGregorian(2000, 1, 1),
+                            cftime.DatetimeGregorian(2001, 1, 1),
+                        ],
+                    ),
+                    coords={
+                        "time": np.array(
+                            [
+                                cftime.DatetimeGregorian(2000, 1, 1),
+                                cftime.DatetimeGregorian(2001, 1, 1),
+                            ],
+                        )
+                    },
+                    dims=["time"],
+                    attrs={
+                        "axis": "T",
+                        "long_name": "time",
+                        "standard_name": "time",
+                        "bounds": "time_bnds",
+                    },
+                ),
+            },
+            dims=["time", "lat", "lon"],
+            attrs={
+                "test_attr": "test",
+                "operation": "temporal_avg",
+                "mode": "group_average",
+                "freq": "year",
+                "weighted": "True",
+            },
+        )
+
+        xr.testing.assert_allclose(result, expected)
+        assert result.ts.attrs == expected.ts.attrs
+        assert result.time.attrs == expected.time.attrs
+
     @requires_dask
     def test_weighted_annual_averages_with_chunking(self):
         ds = self.ds.copy().chunk({"time": 2})
@@ -1160,6 +1211,68 @@ class TestClimatology:
         )
 
         xr.testing.assert_identical(result, expected)
+
+    def test_weighted_seasonal_climatology_with_DJF_and_skipna(self):
+        ds = self.ds.copy(deep=True)
+
+        # Replace all MAM values with np.nan.
+        djf_months = [3, 4, 5]
+        for mon in djf_months:
+            ds["ts"] = ds.ts.where(ds.ts.time.dt.month != mon, np.nan)
+
+        result = ds.temporal.climatology(
+            "ts",
+            "season",
+            season_config={"dec_mode": "DJF", "drop_incomplete_djf": True},
+            skipna=True,
+        )
+
+        expected = ds.copy()
+        expected = expected.drop_dims("time")
+        expected_time = xr.DataArray(
+            data=np.array(
+                [
+                    cftime.DatetimeGregorian(1, 1, 1),
+                    cftime.DatetimeGregorian(1, 4, 1),
+                    cftime.DatetimeGregorian(1, 7, 1),
+                    cftime.DatetimeGregorian(1, 10, 1),
+                ],
+            ),
+            coords={
+                "time": np.array(
+                    [
+                        cftime.DatetimeGregorian(1, 1, 1),
+                        cftime.DatetimeGregorian(1, 4, 1),
+                        cftime.DatetimeGregorian(1, 7, 1),
+                        cftime.DatetimeGregorian(1, 10, 1),
+                    ],
+                ),
+            },
+            attrs={
+                "axis": "T",
+                "long_name": "time",
+                "standard_name": "time",
+                "bounds": "time_bnds",
+            },
+        )
+        expected["ts"] = xr.DataArray(
+            name="ts",
+            data=np.ones((4, 4, 4)),
+            coords={"lat": expected.lat, "lon": expected.lon, "time": expected_time},
+            dims=["time", "lat", "lon"],
+            attrs={
+                "operation": "temporal_avg",
+                "mode": "climatology",
+                "freq": "season",
+                "weighted": "True",
+                "dec_mode": "DJF",
+                "drop_incomplete_djf": "True",
+            },
+        )
+        expected.ts[1] = np.nan
+
+        # MAM should be np.nan
+        assert result.identical(expected)
 
     @requires_dask
     def test_chunked_weighted_seasonal_climatology_with_DJF(self):
@@ -1946,6 +2059,62 @@ class TestDepartures:
         )
 
         xr.testing.assert_identical(result, expected)
+
+    def test_weighted_seasonal_departures_with_DJF_and_skipna(self):
+        ds = self.ds.copy(deep=True)
+
+        # Replace all MAM values with np.nan.
+        djf_months = [3, 4, 5]
+        for mon in djf_months:
+            ds["ts"] = ds.ts.where(ds.ts.time.dt.month != mon, np.nan)
+
+        result = ds.temporal.departures(
+            "ts",
+            "season",
+            weighted=True,
+            season_config={"dec_mode": "DJF", "drop_incomplete_djf": True},
+            skipna=True,
+        )
+
+        expected = ds.copy()
+        expected = expected.drop_dims("time")
+        expected["ts"] = xr.DataArray(
+            name="ts",
+            data=np.array([[[np.nan]], [[0.0]], [[0.0]], [[0.0]]]),
+            coords={
+                "lat": expected.lat,
+                "lon": expected.lon,
+                "time": xr.DataArray(
+                    data=np.array(
+                        [
+                            cftime.DatetimeGregorian(2000, 4, 1),
+                            cftime.DatetimeGregorian(2000, 7, 1),
+                            cftime.DatetimeGregorian(2000, 10, 1),
+                            cftime.DatetimeGregorian(2001, 1, 1),
+                        ],
+                    ),
+                    dims=["time"],
+                    attrs={
+                        "axis": "T",
+                        "long_name": "time",
+                        "standard_name": "time",
+                        "bounds": "time_bnds",
+                    },
+                ),
+            },
+            dims=["time", "lat", "lon"],
+            attrs={
+                "test_attr": "test",
+                "operation": "temporal_avg",
+                "mode": "departures",
+                "freq": "season",
+                "weighted": "True",
+                "dec_mode": "DJF",
+                "drop_incomplete_djf": "True",
+            },
+        )
+
+        assert result.identical(expected)
 
     def test_weighted_seasonal_departures_with_DJF_and_keep_weights(self):
         ds = self.ds.copy()
