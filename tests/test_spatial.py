@@ -140,6 +140,17 @@ class TestAverage:
         with pytest.raises(ValueError):
             self.ds.spatial.average("ts", axis=["X", "Y"], weights=weights)
 
+    def test_raises_error_if_required_weight_not_between_zero_and_one(
+        self,
+    ):
+        # ensure error if required_weight less than zero
+        with pytest.raises(ValueError):
+            self.ds.spatial.average("ts", axis=["X", "Y"], required_weight=-0.01)
+
+        # ensure error if required_weight greater than 1
+        with pytest.raises(ValueError):
+            self.ds.spatial.average("ts", axis=["X", "Y"], required_weight=1.01)
+
     def test_spatial_average_for_lat_region_and_keep_weights(self):
         ds = self.ds.copy()
 
@@ -250,6 +261,29 @@ class TestAverage:
                 ]
             ),
             dims=["lon", "lat"],
+        )
+
+        xr.testing.assert_allclose(result, expected)
+
+    def test_spatial_average_with_required_weight(self):
+        ds = self.ds.copy()
+
+        # insert a nan
+        ds["ts"][0, :, 2] = np.nan
+
+        result = ds.spatial.average(
+            "ts",
+            axis=["X", "Y"],
+            lat_bounds=(-5.0, 5),
+            lon_bounds=(-170, -120.1),
+            required_weight=1.0,
+        )
+
+        expected = self.ds.copy()
+        expected["ts"] = xr.DataArray(
+            data=np.array([np.nan, 1.0, 1.0]),
+            coords={"time": expected.time},
+            dims="time",
         )
 
         xr.testing.assert_allclose(result, expected)
