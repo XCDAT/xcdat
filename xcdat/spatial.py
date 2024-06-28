@@ -777,7 +777,6 @@ class SpatialAccessor:
         # replace values that do not meet minimum weight with nan
         if required_weight > 0.0:
             # sum all weights (assuming no missing values exist)
-            print(dim)
             weight_sum_all = weights.sum(dim=dim)  # type: ignore
             # zero out cells with missing values in data_var
             weights = xr.where(~np.isnan(data_var), weights, 0)

@@ -288,6 +288,26 @@ class TestAverage:
 
         xr.testing.assert_allclose(result, expected)
 
+    def test_spatial_average_with_required_weight_as_None(self):
+        ds = self.ds.copy()
+
+        result = ds.spatial.average(
+            "ts",
+            axis=["X", "Y"],
+            lat_bounds=(-5.0, 5),
+            lon_bounds=(-170, -120.1),
+            required_weight=None,
+        )
+
+        expected = self.ds.copy()
+        expected["ts"] = xr.DataArray(
+            data=np.array([2.25, 1.0, 1.0]),
+            coords={"time": expected.time},
+            dims="time",
+        )
+
+        xr.testing.assert_allclose(result, expected)
+
     def test_spatial_average_for_lat_and_lon_region_with_custom_weights(self):
         ds = self.ds.copy()
 
