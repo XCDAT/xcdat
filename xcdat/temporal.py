@@ -979,6 +979,41 @@ class TemporalAccessor:
         else:
             self._season_config["custom_seasons"] = self._form_seasons(custom_seasons)
 
+    def _set_required_weight_pct(self, required_weight_pct: float | None) -> float:
+        """Check and set the `self._required_weight_pct` attribute.
+
+        Parameters
+        ----------
+        required_weight_pct : float | None
+            The required weight percentage.
+
+        Returns
+        -------
+        float
+            The required weight percentage.
+
+        Raises
+        ------
+        ValueError
+            If the `required_weight_pct` argument is less than 0.
+        ValueError
+            If the `required_weight_pct` argument is greater than 1.
+        """
+        if required_weight_pct is None:
+            required_weight_pct = 0.0
+        elif required_weight_pct < 0.0:
+            raise ValueError(
+                "required_weight_pct argument is less than 0. "
+                "required_weight_pct must be between 0 and 1."
+            )
+        elif required_weight_pct > 1.0:
+            raise ValueError(
+                "required_weight_pct argument is greater than 1. "
+                "required_weight_pct must be between 0 and 1."
+            )
+
+        return required_weight_pct
+
     def _is_valid_reference_period(self, reference_period: Tuple[str, str]):
         try:
             datetime.strptime(reference_period[0], "%Y-%m-%d")
@@ -1177,28 +1212,6 @@ class TemporalAccessor:
 
         return dv
 
-    def _get_masked_weights(self, dv: xr.DataArray) -> xr.DataArray:
-        """Get weights with missing data (`np.nan`) receiving no weight (zero).
-
-        To achieve this, first broadcast the one-dimensional (temporal
-        dimension) shape of the `self._weights` DataArray to the
-        multi-dimensional shape of its corresponding data variable.
-
-        Parameters
-        ----------
-        dv : xr.DataArray
-            The variable.
-
-        Returns
-        -------
-        xr.DataArray
-            The masked weights.
-        """
-        masked_weights, _ = xr.broadcast(self._weights, dv)
-        masked_weights = xr.where(dv.copy().isnull(), 0.0, masked_weights)
-
-        return masked_weights
-
     def _group_average(self, ds: xr.Dataset, data_var: str) -> xr.DataArray:
         """Averages a data variable by time group.
 
@@ -1228,16 +1241,10 @@ class TemporalAccessor:
             # Weight the data variable.
             dv *= self._weights
 
-            # Ensure missing data (`np.nan`) receives no weight (zero). To
-            # achieve this, first broadcast the one-dimensional (temporal
-            # dimension) shape of the `weights` DataArray to the
-            # multi-dimensional shape of its corresponding data variable.
-            masked_weights, _ = xr.broadcast(self._weights, dv)
-            masked_weights = xr.where(dv.copy().isnull(), 0.0, masked_weights)
-
             # Perform weighted average using the formula
-            # WA = sum(data*weights) / sum(weights). The denominator must be
-            # included to take into account zero weight for missing data.
+            # WA = sum(data*weights) / sum(masked weights). The denominator must
+            # be included to take into account zero weight for missing data.
+            masked_weights = self._get_masked_weights(dv)
             with xr.set_options(keep_attrs=True):
                 dv = self._group_data(dv).sum() / self._group_data(masked_weights).sum()
 
@@ -1312,21 +1319,27 @@ class TemporalAccessor:
 
         return weights
 
-    def _set_required_weight_pct(self, required_weight_pct: float | None) -> float:
-        if required_weight_pct is None:
-            required_weight_pct = 0.0
-        elif required_weight_pct < 0.0:
-            raise ValueError(
-                "required_weight argment is less than zero. "
-                "required_weight must be between 0 and 1."
-            )
-        elif required_weight_pct > 1.0:
-            raise ValueError(
-                "required_weight argment is greater than zero. "
-                "required_weight must be between 0 and 1."
-            )
+    def _get_masked_weights(self, dv: xr.DataArray) -> xr.DataArray:
+        """Get weights with missing data (`np.nan`) receiving no weight (zero).
 
-        return required_weight_pct
+        To achieve this, first broadcast the one-dimensional (temporal
+        dimension) shape of the `self._weights` DataArray to the
+        multi-dimensional shape of its corresponding data variable.
+
+        Parameters
+        ----------
+        dv : xr.DataArray
+            The variable.
+
+        Returns
+        -------
+        xr.DataArray
+            The masked weights.
+        """
+        masked_weights, _ = xr.broadcast(self._weights, dv)
+        masked_weights = xr.where(dv.copy().isnull(), 0.0, masked_weights)
+
+        return masked_weights
 
     def _apply_weight_threshold(
         self, dv: xr.DataArray, masked_weights: xr.DataArray
