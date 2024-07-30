@@ -1,4 +1,6 @@
 """Module containing temporal functions."""
+from __future__ import annotations
+
 from datetime import datetime
 from itertools import chain
 from typing import Dict, List, Literal, Optional, Tuple, TypedDict, Union, get_args
@@ -832,7 +834,7 @@ class TemporalAccessor:
         # it becomes obsolete after the data variable is averaged. When the
         # averaged data variable is added to the dataset, the new time dimension
         # and its associated coordinates are also added.
-        ds = ds.drop_dims(self.dim)  # type: ignore
+        ds = ds.drop_dims(self.dim)
         ds[dv_avg.name] = dv_avg
 
         if keep_weights:
@@ -864,7 +866,7 @@ class TemporalAccessor:
         dv = _get_data_var(self._dataset, data_var)
 
         self.data_var = data_var
-        self.dim = get_dim_coords(dv, "T").name
+        self.dim = str(get_dim_coords(dv, "T").name)
 
         if not _contains_datetime_like_objects(dv[self.dim]):
             first_time_coord = dv[self.dim].values[0]
@@ -1137,9 +1139,7 @@ class TemporalAccessor:
         -------
         xr.Dataset
         """
-        ds = ds.sel(  # type: ignore
-            **{self.dim: ~((ds.time.dt.month == 2) & (ds.time.dt.day == 29))}
-        )
+        ds = ds.sel(**{self.dim: ~((ds.time.dt.month == 2) & (ds.time.dt.day == 29))})
         return ds
 
     def _average(self, ds: xr.Dataset, data_var: str) -> xr.DataArray:
@@ -1164,13 +1164,40 @@ class TemporalAccessor:
                 time_bounds = ds.bounds.get_bounds("T", var_key=data_var)
                 self._weights = self._get_weights(time_bounds)
 
-                dv = dv.weighted(self._weights).mean(dim=self.dim)  # type: ignore
+                dv = dv.weighted(self._weights).mean(dim=self.dim)
+
+                # Apply the weight threshold using the required percentage (if set).
+                if self._required_weight_pct > 0.0:
+                    masked_weights = self._get_masked_weights(dv)
+                    dv = self._apply_weight_threshold(dv, masked_weights)
             else:
-                dv = dv.mean(dim=self.dim)  # type: ignore
+                dv = dv.mean(dim=self.dim)
 
         dv = self._add_operation_attrs(dv)
 
         return dv
+
+    def _get_masked_weights(self, dv: xr.DataArray) -> xr.DataArray:
+        """Get weights with missing data (`np.nan`) receiving no weight (zero).
+
+        To achieve this, first broadcast the one-dimensional (temporal
+        dimension) shape of the `self._weights` DataArray to the
+        multi-dimensional shape of its corresponding data variable.
+
+        Parameters
+        ----------
+        dv : xr.DataArray
+            The variable.
+
+        Returns
+        -------
+        xr.DataArray
+            The masked weights.
+        """
+        masked_weights, _ = xr.broadcast(self._weights, dv)
+        masked_weights = xr.where(dv.copy().isnull(), 0.0, masked_weights)
+
+        return masked_weights
 
     def _group_average(self, ds: xr.Dataset, data_var: str) -> xr.DataArray:
         """Averages a data variable by time group.
@@ -1304,7 +1331,7 @@ class TemporalAccessor:
     def _apply_weight_threshold(
         self, dv: xr.DataArray, masked_weights: xr.DataArray
     ) -> xr.DataArray:
-        """Nan out values that don't meet the weight threshold percentage.
+        """Nan out values that do not meet the weight threshold percentage.
 
         Parameters
         ----------
@@ -1320,7 +1347,7 @@ class TemporalAccessor:
         """
         # Sum all weights, including zero for missing values.
         weight_sum_all = self._weights.sum(dim=self.dim)
-        weight_sum_masked = masked_weights.sum(dim=self.dim)  # type: ignore
+        weight_sum_masked = masked_weights.sum(dim=self.dim)
 
         # Get fraction of the available weight.
         frac = weight_sum_masked / weight_sum_all
