@@ -747,19 +747,17 @@ class SpatialAccessor:
         # ensure required weight is between 0 and 1
         if required_weight is None:
             required_weight = 0.0
-
-        if required_weight < 0.0:
+        elif required_weight < 0.0:
             raise ValueError(
-                "required_weight argment is less than zero. "
+                "required_weight argument is less than 0. "
                 "required_weight must be between 0 and 1."
             )
-
-        if required_weight > 1.0:
+        elif required_weight > 1.0:
             raise ValueError(
-                "required_weight argment is greater than zero. "
+                "required_weight argument is greater than 1. "
                 "required_weight must be between 0 and 1."
             )
-
+            
         # need weights to match data_var dimensionality
         if required_weight > 0.0:
             weights, data_var = xr.broadcast(weights, data_var)
