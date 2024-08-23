@@ -76,7 +76,7 @@ class SpatialAccessor:
         keep_weights: bool = False,
         lat_bounds: Optional[RegionAxisBounds] = None,
         lon_bounds: Optional[RegionAxisBounds] = None,
-        required_weight: Optional[float] = 0.0,
+        minimum_weight: Optional[float] = None,
     ) -> xr.Dataset:
         """
         Calculates the spatial average for a rectilinear grid over an optionally
@@ -126,9 +126,10 @@ class SpatialAccessor:
             ignored if ``weights`` are supplied. The lower bound can be larger
             than the upper bound (e.g., across the prime meridian, dateline), by
             default None.
-        required_weight : optional, float
+        minimum_weight : optional, float
             Fraction of data coverage (i..e, weight) needed to return a
-            spatial average value. Value must range from 0 to 1.
+            spatial average value. Value must range from 0 to 1, by default None
+            (equivalent to minimum_weight=0.0).
 
         Returns
         -------
@@ -200,7 +201,7 @@ class SpatialAccessor:
             self._weights = weights
 
         self._validate_weights(dv, axis)
-        ds[dv.name] = self._averager(dv, axis, required_weight=required_weight)
+        ds[dv.name] = self._averager(dv, axis, minimum_weight=minimum_weight)
 
         if keep_weights:
             ds[self._weights.name] = self._weights
@@ -709,7 +710,7 @@ class SpatialAccessor:
         self,
         data_var: xr.DataArray,
         axis: List[SpatialAxis] | Tuple[SpatialAxis, ...],
-        required_weight: Optional[float] = 0.0,
+        minimum_weight: Optional[float] = None,
     ):
         """Perform a weighted average of a data variable.
 
@@ -728,9 +729,10 @@ class SpatialAccessor:
             Data variable inside a Dataset.
         axis : List[SpatialAxis] | Tuple[SpatialAxis, ...]
             List of axis dimensions to average over.
-        required_weight : optional, float
+        minimum_weight : optional, float
             Fraction of data coverage (i..e, weight) needed to return a
-            spatial average value. Value must range from 0 to 1.
+            spatial average value. Value must range from 0 to 1, by default None
+            (equivalent to minimum_weight=0.0).
 
         Returns
         -------
@@ -745,21 +747,21 @@ class SpatialAccessor:
         weights = self._weights.fillna(0)
 
         # ensure required weight is between 0 and 1
-        if required_weight is None:
-            required_weight = 0.0
-        elif required_weight < 0.0:
+        if minimum_weight is None:
+            minimum_weight = 0.0
+        elif minimum_weight < 0.0:
             raise ValueError(
-                "required_weight argument is less than 0. "
-                "required_weight must be between 0 and 1."
+                "minimum_weight argument is less than 0. "
+                "minimum_weight must be between 0 and 1."
             )
-        elif required_weight > 1.0:
+        elif minimum_weight > 1.0:
             raise ValueError(
-                "required_weight argument is greater than 1. "
-                "required_weight must be between 0 and 1."
+                "minimum_weight argument is greater than 1. "
+                "minimum_weight must be between 0 and 1."
             )
-            
+
         # need weights to match data_var dimensionality
-        if required_weight > 0.0:
+        if minimum_weight > 0.0:
             weights, data_var = xr.broadcast(weights, data_var)
 
         # get averaging dimensions
@@ -773,7 +775,7 @@ class SpatialAccessor:
 
         # if weight thresholds applied, calculate fraction of data availability
         # replace values that do not meet minimum weight with nan
-        if required_weight > 0.0:
+        if minimum_weight > 0.0:
             # sum all weights (assuming no missing values exist)
             weight_sum_all = weights.sum(dim=dim)  # type: ignore
             # zero out cells with missing values in data_var
@@ -783,6 +785,6 @@ class SpatialAccessor:
             # get fraction of weight available
             frac = weight_sum_masked / weight_sum_all
             # nan out values that don't meet specified weight threshold
-            weighted_mean = xr.where(frac >= required_weight, weighted_mean, np.nan)
+            weighted_mean = xr.where(frac >= minimum_weight, weighted_mean, np.nan)
 
         return weighted_mean
