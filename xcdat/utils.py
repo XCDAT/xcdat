@@ -203,7 +203,7 @@ def _get_masked_weights(dv: xr.DataArray, weights: xr.DataArray) -> xr.DataArray
 
 
 def _validate_min_weight(min_weight: float | None) -> float:
-    """Validate the `min_weight` value.
+    """Validate the ``min_weight`` value.
 
     Parameters
     ----------
