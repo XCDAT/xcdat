@@ -2,6 +2,7 @@ import importlib
 import json
 from typing import Dict, List, Optional, Union
 
+import numpy as np
 import xarray as xr
 from dask.array.core import Array
 
@@ -132,3 +133,106 @@ def _if_multidim_dask_array_then_load(
         return obj.load()
 
     return None
+
+
+def mask_var_with_weight_threshold(
+    dv: xr.DataArray, weights: xr.DataArray, min_weight: float
+) -> xr.DataArray:
+    """Mask values that do not meet the minimum weight threshold using np.nan.
+
+    This function is useful for cases where the weighting of data might be
+    skewed based on the availability of data. For example, if one season in a
+    time series has more significantly more missing data than other seasons, it
+    can result in inaccurate calculations of climatologies. Masking values that
+    do not meet the minimum weight threshold ensures more accurate calculations.
+
+    Parameters
+    ----------
+    dv : xr.DataArray
+        The weighted variable.
+    weights : xr.DataArray
+        A DataArray containing either the regional or temporal weights used for
+        weighted averaging. ``weights`` must include the same axis dimensions
+        and dimensional sizes as the data variable.
+    min_weight : float
+        Fraction of data coverage (i..e, weight) needed to return a
+        spatial average value. Value must range from 0 to 1.
+
+    Returns
+    -------
+    xr.DataArray
+        The variable with the minimum weight threshold applied.
+    """
+    masked_weights = _get_masked_weights(dv, weights)
+
+    # Sum all weights, including zero for missing values.
+    dim = weights.dims
+    weight_sum_all = weights.sum(dim=dim)
+    weight_sum_masked = masked_weights.sum(dim=dim)
+
+    # Get fraction of the available weight.
+    frac = weight_sum_masked / weight_sum_all
+
+    # Nan out values that don't meet specified weight threshold.
+    dv_new = xr.where(frac >= min_weight, dv, np.nan)
+
+    return dv_new
+
+
+def _get_masked_weights(dv: xr.DataArray, weights: xr.DataArray) -> xr.DataArray:
+    """Get weights with missing data (`np.nan`) receiving no weight (zero).
+
+    Parameters
+    ----------
+    dv : xr.DataArray
+        The variable.
+    weights : xr.DataArray
+        A DataArray containing either the regional or temporal weights used for
+        weighted averaging. ``weights`` must include the same axis dimensions
+        and dimensional sizes as the data variable.
+
+    Returns
+    -------
+    xr.DataArray
+        The masked weights.
+    """
+    masked_weights, _ = xr.broadcast(weights, dv)
+    masked_weights = xr.where(dv.copy().isnull(), 0.0, masked_weights)
+
+    return masked_weights
+
+
+def _validate_min_weight(min_weight: float | None) -> float:
+    """Validate the `min_weight` value.
+
+    Parameters
+    ----------
+    min_weight : float | None
+        Fraction of data coverage (i..e, weight) needed to return a
+        spatial average value. Value must range from 0 to 1.
+
+    Returns
+    -------
+    float
+        The required weight percentage.
+
+    Raises
+    ------
+    ValueError
+        If the `min_weight` argument is less than 0.
+    ValueError
+        If the `min_weight` argument is greater than 1.
+    """
+    if min_weight is None:
+        return 0.0
+    elif min_weight < 0.0:
+        raise ValueError(
+            "min_weight argument is less than 0. " "min_weight must be between 0 and 1."
+        )
+    elif min_weight > 1.0:
+        raise ValueError(
+            "min_weight argument is greater than 1. "
+            "min_weight must be between 0 and 1."
+        )
+
+    return min_weight

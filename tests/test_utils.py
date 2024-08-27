@@ -1,7 +1,9 @@
+import numpy as np
 import pytest
 import xarray as xr
 
-from xcdat.utils import compare_datasets, str_to_bool
+from tests.fixtures import generate_dataset
+from xcdat.utils import compare_datasets, mask_var_with_weight_threshold, str_to_bool
 
 
 class TestCompareDatasets:
@@ -103,3 +105,129 @@ class TestStrToBool:
 
         with pytest.raises(ValueError):
             str_to_bool("1")
+
+
+class TestMaskVarWithWeightThreshold:
+    @pytest.fixture(autouse=True)
+    def setup(self):
+        self.ds = generate_dataset(
+            decode_times=True, cf_compliant=False, has_bounds=True
+        )
+
+    def test_returns_mask_var_with_spatial_min_weight_of_100(self):
+        ds = self.ds.copy()
+        ds = ds.isel({"time": slice(0, 3), "lat": slice(0, 3), "lon": slice(0, 3)})
+        ds["ts"][0, :, 2] = np.nan
+
+        # Function arguments.
+        dv = ds["ts"].copy()
+        weights = ds.spatial.get_weights(
+            axis=["X", "Y"],
+            lat_bounds=(-5.0, 5),
+            lon_bounds=(-170, -120.1),
+            data_var="ts",
+        )
+
+        result = mask_var_with_weight_threshold(dv, weights, min_weight=1.0)
+        expected = xr.DataArray(
+            data=np.array(
+                [
+                    [
+                        [np.nan, np.nan, np.nan],
+                        [np.nan, np.nan, np.nan],
+                        [np.nan, np.nan, np.nan],
+                    ],
+                    [[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0]],
+                    [[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0]],
+                ]
+            ),
+            coords={"time": ds.time, "lat": ds.lat, "lon": ds.lon},
+            dims=["time", "lat", "lon"],
+        )
+
+        xr.testing.assert_allclose(result, expected)
+
+    def test_returns_mask_var_with_spatial_min_weight_of_0(self):
+        ds = self.ds.copy()
+        ds = ds.isel({"time": slice(0, 3), "lat": slice(0, 3), "lon": slice(0, 3)})
+
+        # Function arguments.
+        dv = ds["ts"].copy()
+        weights = ds.spatial.get_weights(
+            axis=["X", "Y"],
+            lat_bounds=(-5.0, 5),
+            lon_bounds=(-170, -120.1),
+            data_var="ts",
+        )
+
+        result = mask_var_with_weight_threshold(dv, weights, min_weight=0)
+        expected = xr.DataArray(
+            data=np.array(
+                [
+                    [[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0]],
+                    [[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0]],
+                    [[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0]],
+                ]
+            ),
+            coords={"time": ds.time, "lat": ds.lat, "lon": ds.lon},
+            dims=["time", "lat", "lon"],
+        )
+
+        xr.testing.assert_allclose(result, expected)
+
+    def test_returns_mask_var_with_temporal_min_weight_of_100(self):
+        ds = self.ds.copy()
+        ds = ds.isel({"time": slice(0, 3), "lat": slice(0, 3), "lon": slice(0, 3)})
+        ds["ts"][0, :, 2] = np.nan
+
+        # Function arguments.
+        dv = ds["ts"].copy()
+        weights = xr.DataArray(
+            name="time_wts",
+            data=np.array([1.0, 1.0, 1.0]),
+            dims="time",
+            coords={"time": ds.time},
+        )
+
+        result = mask_var_with_weight_threshold(dv, weights, min_weight=0)
+        expected = xr.DataArray(
+            data=np.array(
+                [
+                    [[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [np.nan, 1.0, 1.0]],
+                    [[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [np.nan, 1.0, 1.0]],
+                    [[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [np.nan, 1.0, 1.0]],
+                ]
+            ),
+            coords={"lat": ds.lat, "lon": ds.lon, "time": ds.time},
+            dims=["lat", "lon", "time"],
+        )
+
+        xr.testing.assert_allclose(result, expected)
+
+    def test_returns_mask_var_with_temporal_min_weight_of_0(self):
+        ds = self.ds.copy()
+        ds = ds.isel({"time": slice(0, 3), "lat": slice(0, 3), "lon": slice(0, 3)})
+
+        # Function arguments.
+        dv = ds["ts"].copy()
+        weights = xr.DataArray(
+            name="time_wts",
+            data=np.array([1.0, 1.0, 1.0]),
+            dims="time",
+            coords={"time": ds.time},
+        )
+
+        result = mask_var_with_weight_threshold(dv, weights, min_weight=0)
+        expected = xr.DataArray(
+            data=np.array(
+                [
+                    [[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0]],
+                    [[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0]],
+                    [[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [1.0, 1.0, 1.0]],
+                ]
+            ),
+            coords={"lat": ds.lat, "lon": ds.lon, "time": ds.time},
+            dims=["lat", "lon", "time"],
+        )
+
+        xr.testing.assert_allclose(result, expected)
