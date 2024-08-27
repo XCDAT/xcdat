@@ -926,7 +926,7 @@ class TemporalAccessor:
         min_weight : float | None, optional
             Fraction of data coverage (i..e, weight) needed to return a
             spatial average value. Value must range from 0 to 1, by default None
-            ((equivalent to ``min_weight=0.0``).
+            (equivalent to ``min_weight=0.0``).
 
         Raises
         ------
