@@ -3,7 +3,12 @@ import pytest
 import xarray as xr
 
 from tests.fixtures import generate_dataset
-from xcdat.utils import compare_datasets, mask_var_with_weight_threshold, str_to_bool
+from xcdat.utils import (
+    _validate_min_weight,
+    compare_datasets,
+    mask_var_with_weight_threshold,
+    str_to_bool,
+)
 
 
 class TestCompareDatasets:
@@ -231,3 +236,23 @@ class TestMaskVarWithWeightThreshold:
         )
 
         xr.testing.assert_allclose(result, expected)
+
+
+class TestValidateMinWeight:
+    def test_pass_None_returns_0(self):
+        result = _validate_min_weight(None)
+
+        assert result == 0
+
+    def test_returns_error_if_less_than_0(self):
+        with pytest.raises(ValueError):
+            _validate_min_weight(-1)
+
+    def test_returns_error_if_greater_than_1(self):
+        with pytest.raises(ValueError):
+            _validate_min_weight(1.1)
+
+    def test_returns_valid_min_weight(self):
+        result = _validate_min_weight(1)
+
+        assert result == 1
