@@ -489,14 +489,6 @@ class TestGroupAverage:
                             cftime.DatetimeGregorian(2001, 1, 1),
                         ],
                     ),
-                    coords={
-                        "time": np.array(
-                            [
-                                cftime.DatetimeGregorian(2000, 1, 1),
-                                cftime.DatetimeGregorian(2001, 1, 1),
-                            ],
-                        )
-                    },
                     dims=["time"],
                     attrs={
                         "axis": "T",
@@ -540,14 +532,6 @@ class TestGroupAverage:
                             cftime.DatetimeGregorian(2001, 1, 1),
                         ],
                     ),
-                    coords={
-                        "time": np.array(
-                            [
-                                cftime.DatetimeGregorian(2000, 1, 1),
-                                cftime.DatetimeGregorian(2001, 1, 1),
-                            ],
-                        )
-                    },
                     dims=["time"],
                     attrs={
                         "axis": "T",
@@ -570,6 +554,195 @@ class TestGroupAverage:
         xr.testing.assert_allclose(result, expected)
         assert result.ts.attrs == expected.ts.attrs
         assert result.time.attrs == expected.time.attrs
+
+    def test_weighted_annual_averages_with_masked_data_and_min_weight_threshold_of_100_percent(
+        self,
+    ):
+        # Set up dataset
+        ds = xr.Dataset(
+            coords={
+                "lat": [-90],
+                "lon": [0],
+                "time": xr.DataArray(
+                    data=np.array(
+                        [
+                            "2000-01-01T00:00:00.000000000",
+                            "2000-02-01T00:00:00.000000000",
+                            "2001-01-01T00:00:00.000000000",
+                            "2001-02-01T00:00:00.000000000",
+                            "2002-01-01T00:00:00.000000000",
+                        ],
+                        dtype="datetime64[ns]",
+                    ),
+                    dims=["time"],
+                    attrs={
+                        "axis": "T",
+                        "long_name": "time",
+                        "standard_name": "time",
+                        "bounds": "time_bnds",
+                    },
+                ),
+            }
+        )
+        ds.time.encoding = {"calendar": "standard"}
+
+        ds["time_bnds"] = xr.DataArray(
+            name="time_bnds",
+            data=np.array(
+                [
+                    ["2000-01-01T00:00:00.000000000", "2000-02-01T00:00:00.000000000"],
+                    ["2000-02-01T00:00:00.000000000", "2000-03-01T00:00:00.000000000"],
+                    ["2001-01-01T00:00:00.000000000", "2000-01-01T00:00:00.000000000"],
+                    ["2001-02-01T00:00:00.000000000", "2000-03-01T00:00:00.000000000"],
+                    ["2002-01-01T00:00:00.000000000", "2002-02-01T00:00:00.000000000"],
+                ],
+                dtype="datetime64[ns]",
+            ),
+            coords={"time": ds.time},
+            dims=["time", "bnds"],
+            attrs={"xcdat_bounds": "True"},
+        )
+
+        ds["ts"] = xr.DataArray(
+            data=np.array([[[2]], [[np.nan]], [[1]], [[1]], [[0.5]]]),
+            coords={"lat": ds.lat, "lon": ds.lon, "time": ds.time},
+            dims=["time", "lat", "lon"],
+        )
+
+        # NOTE: If a cell has a missing value for any of the years, the average
+        # for that year should be masked with a min_weight threshold of 100%.
+        result = ds.temporal.group_average("ts", "year", min_weight=1.0)
+        expected = ds.copy()
+        expected = expected.drop_dims("time")
+        expected["ts"] = xr.DataArray(
+            name="ts",
+            data=np.array([[[np.nan]], [[1]], [[0.5]]]),
+            coords={
+                "lat": expected.lat,
+                "lon": expected.lon,
+                "time": xr.DataArray(
+                    data=np.array(
+                        [
+                            cftime.DatetimeGregorian(2000, 1, 1),
+                            cftime.DatetimeGregorian(2001, 1, 1),
+                            cftime.DatetimeGregorian(2002, 1, 1),
+                        ],
+                    ),
+                    dims=["time"],
+                    attrs={
+                        "axis": "T",
+                        "long_name": "time",
+                        "standard_name": "time",
+                        "bounds": "time_bnds",
+                    },
+                ),
+            },
+            dims=["time", "lat", "lon"],
+            attrs={
+                "test_attr": "test",
+                "operation": "temporal_avg",
+                "mode": "group_average",
+                "freq": "year",
+                "weighted": "True",
+            },
+        )
+
+        xr.testing.assert_allclose(result, expected)
+
+    def test_weighted_annual_averages_with_masked_data_and_min_weight_threshold_of_50_percent(
+        self,
+    ):
+        # Set up dataset
+        ds = xr.Dataset(
+            coords={
+                "lat": [-90],
+                "lon": [0],
+                "time": xr.DataArray(
+                    data=np.array(
+                        [
+                            "2000-01-01T00:00:00.000000000",
+                            "2000-02-01T00:00:00.000000000",
+                            "2001-01-01T00:00:00.000000000",
+                            "2001-02-01T00:00:00.000000000",
+                            "2002-01-01T00:00:00.000000000",
+                        ],
+                        dtype="datetime64[ns]",
+                    ),
+                    dims=["time"],
+                    attrs={
+                        "axis": "T",
+                        "long_name": "time",
+                        "standard_name": "time",
+                        "bounds": "time_bnds",
+                    },
+                ),
+            }
+        )
+        ds.time.encoding = {"calendar": "standard"}
+
+        ds["time_bnds"] = xr.DataArray(
+            name="time_bnds",
+            data=np.array(
+                [
+                    ["2000-01-01T00:00:00.000000000", "2000-02-01T00:00:00.000000000"],
+                    ["2000-02-01T00:00:00.000000000", "2000-03-01T00:00:00.000000000"],
+                    ["2001-01-01T00:00:00.000000000", "2000-01-01T00:00:00.000000000"],
+                    ["2001-02-01T00:00:00.000000000", "2000-03-01T00:00:00.000000000"],
+                    ["2002-01-01T00:00:00.000000000", "2002-02-01T00:00:00.000000000"],
+                ],
+                dtype="datetime64[ns]",
+            ),
+            coords={"time": ds.time},
+            dims=["time", "bnds"],
+            attrs={"xcdat_bounds": "True"},
+        )
+
+        ds["ts"] = xr.DataArray(
+            data=np.array([[[2]], [[np.nan]], [[1]], [[1]], [[0.5]]]),
+            coords={"lat": ds.lat, "lon": ds.lon, "time": ds.time},
+            dims=["time", "lat", "lon"],
+        )
+
+        # NOTE: The second cell of "ts" has missing data, but the first cell
+        # has more weight (due to more days in the month of Jan vs. Feb) so the
+        # average for the year is not masked with a min_weight threshold of 50%.
+        result = ds.temporal.group_average("ts", "year", min_weight=0.50)
+        expected = ds.copy()
+        expected = expected.drop_dims("time")
+        expected["ts"] = xr.DataArray(
+            name="ts",
+            data=np.array([[[2.0]], [[1]], [[0.5]]]),
+            coords={
+                "lat": expected.lat,
+                "lon": expected.lon,
+                "time": xr.DataArray(
+                    data=np.array(
+                        [
+                            cftime.DatetimeGregorian(2000, 1, 1),
+                            cftime.DatetimeGregorian(2001, 1, 1),
+                            cftime.DatetimeGregorian(2002, 1, 1),
+                        ],
+                    ),
+                    dims=["time"],
+                    attrs={
+                        "axis": "T",
+                        "long_name": "time",
+                        "standard_name": "time",
+                        "bounds": "time_bnds",
+                    },
+                ),
+            },
+            dims=["time", "lat", "lon"],
+            attrs={
+                "test_attr": "test",
+                "operation": "temporal_avg",
+                "mode": "group_average",
+                "freq": "year",
+                "weighted": "True",
+            },
+        )
+
+        xr.testing.assert_allclose(result, expected)
 
     def test_weighted_seasonal_averages_with_DJF_and_drop_incomplete_seasons(self):
         ds = self.ds.copy()
@@ -625,6 +798,14 @@ class TestGroupAverage:
         self,
     ):
         ds = self.ds.copy()
+        ds["ts"] = xr.DataArray(
+            data=np.array(
+                [[[2.0]], [[1.0]], [[1.0]], [[1.0]], [[2.0]]], dtype="float64"
+            ),
+            coords={"time": self.ds.time, "lat": self.ds.lat, "lon": self.ds.lon},
+            dims=["time", "lat", "lon"],
+            attrs={"test_attr": "test"},
+        )
 
         result = ds.temporal.group_average(
             "ts",
@@ -698,17 +879,102 @@ class TestGroupAverage:
                             cftime.DatetimeGregorian(2001, 1, 1),
                         ],
                     ),
-                    coords={
-                        "time": np.array(
-                            [
-                                cftime.DatetimeGregorian(2000, 1, 1),
-                                cftime.DatetimeGregorian(2000, 4, 1),
-                                cftime.DatetimeGregorian(2000, 7, 1),
-                                cftime.DatetimeGregorian(2000, 10, 1),
-                                cftime.DatetimeGregorian(2001, 1, 1),
-                            ],
-                        )
+                    dims=["time"],
+                    attrs={
+                        "axis": "T",
+                        "long_name": "time",
+                        "standard_name": "time",
+                        "bounds": "time_bnds",
                     },
+                ),
+            },
+            dims=["time", "lat", "lon"],
+            attrs={
+                "test_attr": "test",
+                "operation": "temporal_avg",
+                "mode": "group_average",
+                "freq": "season",
+                "weighted": "True",
+                "dec_mode": "JFD",
+            },
+        )
+
+        xr.testing.assert_identical(result, expected)
+
+    def test_weighted_seasonal_averages_with_JFD_with_min_weight_threshold_of_100_percent(
+        self,
+    ):
+        time = xr.DataArray(
+            data=np.array(
+                [
+                    "2000-01-16T12:00:00.000000000",
+                    "2000-02-15T12:00:00.000000000",
+                    "2000-03-16T12:00:00.000000000",
+                    "2000-06-16T00:00:00.000000000",
+                    "2000-12-16T00:00:00.000000000",
+                ],
+                dtype="datetime64[ns]",
+            ),
+            dims=["time"],
+            attrs={"axis": "T", "long_name": "time", "standard_name": "time"},
+        )
+        time.encoding = {"calendar": "standard"}
+        time_bnds = xr.DataArray(
+            name="time_bnds",
+            data=np.array(
+                [
+                    ["2000-01-01T00:00:00.000000000", "2000-02-01T00:00:00.000000000"],
+                    ["2000-02-01T00:00:00.000000000", "2000-03-01T00:00:00.000000000"],
+                    ["2000-03-01T00:00:00.000000000", "2000-04-01T00:00:00.000000000"],
+                    ["2000-06-01T00:00:00.000000000", "2000-07-01T00:00:00.000000000"],
+                    ["2000-11-01T00:00:00.000000000", "2001-01-01T00:00:00.000000000"],
+                ],
+                dtype="datetime64[ns]",
+            ),
+            coords={"time": time},
+            dims=["time", "bnds"],
+            attrs={"xcdat_bounds": "True"},
+        )
+
+        ds = xr.Dataset(
+            data_vars={"time_bnds": time_bnds},
+            coords={"lat": [-90], "lon": [0], "time": time},
+        )
+        ds.time.attrs["bounds"] = "time_bnds"
+
+        ds["ts"] = xr.DataArray(
+            data=np.array(
+                [[[np.nan]], [[1.0]], [[1.0]], [[1.0]], [[2.0]]], dtype="float64"
+            ),
+            coords={"time": self.ds.time, "lat": self.ds.lat, "lon": self.ds.lon},
+            dims=["time", "lat", "lon"],
+            attrs={"test_attr": "test"},
+        )
+
+        # NOTE: If a cell has a missing value for any of the seasons, the average
+        # for that season should be masked with a min_weight threshold of 100%.
+        result = ds.temporal.group_average(
+            "ts",
+            "season",
+            season_config={"dec_mode": "JFD"},
+            min_weight=1.0,
+        )
+        expected = ds.copy()
+        expected = expected.drop_dims("time")
+        expected["ts"] = xr.DataArray(
+            name="ts",
+            data=np.array([[[np.nan]], [[1.0]], [[1.0]]]),
+            coords={
+                "lat": expected.lat,
+                "lon": expected.lon,
+                "time": xr.DataArray(
+                    data=np.array(
+                        [
+                            cftime.DatetimeGregorian(2000, 1, 1),
+                            cftime.DatetimeGregorian(2000, 4, 1),
+                            cftime.DatetimeGregorian(2000, 7, 1),
+                        ],
+                    ),
                     dims=["time"],
                     attrs={
                         "axis": "T",
@@ -902,6 +1168,102 @@ class TestGroupAverage:
                             cftime.DatetimeGregorian(2000, 3, 1),
                             cftime.DatetimeGregorian(2000, 6, 1),
                             cftime.DatetimeGregorian(2000, 9, 1),
+                            cftime.DatetimeGregorian(2001, 2, 1),
+                        ],
+                    ),
+                    dims=["time"],
+                    attrs={
+                        "axis": "T",
+                        "long_name": "time",
+                        "standard_name": "time",
+                        "bounds": "time_bnds",
+                    },
+                ),
+            },
+            dims=["time", "lat", "lon"],
+            attrs={
+                "test_attr": "test",
+                "operation": "temporal_avg",
+                "mode": "group_average",
+                "freq": "month",
+                "weighted": "True",
+            },
+        )
+
+        xr.testing.assert_identical(result, expected)
+
+    def test_weighted_monthly_averages_with_masked_data_and_min_weight_threshold_of_100_percent(
+        self,
+    ):
+        # Set up dataset
+        ds = xr.Dataset(
+            coords={
+                "lat": [-90],
+                "lon": [0],
+                "time": xr.DataArray(
+                    data=np.array(
+                        [
+                            "2000-01-01T00:00:00.000000000",
+                            "2000-02-01T00:00:00.000000000",
+                            "2000-02-15T00:00:00.000000000",
+                            "2000-04-01T00:00:00.000000000",
+                            "2001-02-01T00:00:00.000000000",
+                        ],
+                        dtype="datetime64[ns]",
+                    ),
+                    dims=["time"],
+                    attrs={
+                        "axis": "T",
+                        "long_name": "time",
+                        "standard_name": "time",
+                        "bounds": "time_bnds",
+                    },
+                ),
+            }
+        )
+        ds.time.encoding = {"calendar": "standard"}
+
+        ds["time_bnds"] = xr.DataArray(
+            name="time_bnds",
+            data=np.array(
+                [
+                    ["2000-01-01T00:00:00.000000000", "2000-02-01T00:00:00.000000000"],
+                    ["2000-02-01T00:00:00.000000000", "2000-03-01T00:00:00.000000000"],
+                    ["2000-02-01T00:00:00.000000000", "2000-03-01T00:00:00.000000000"],
+                    ["2000-04-01T00:00:00.000000000", "2000-05-01T00:00:00.000000000"],
+                    ["2001-02-01T00:00:00.000000000", "2001-03-01T00:00:00.000000000"],
+                ],
+                dtype="datetime64[ns]",
+            ),
+            coords={"time": ds.time},
+            dims=["time", "bnds"],
+            attrs={"xcdat_bounds": "True"},
+        )
+
+        ds["ts"] = xr.DataArray(
+            data=np.array([[[2]], [[np.nan]], [[1]], [[1]], [[1]]]),
+            coords={"lat": ds.lat, "lon": ds.lon, "time": ds.time},
+            dims=["time", "lat", "lon"],
+            attrs={"test_attr": "test"},
+        )
+
+        # NOTE: If a cell has a missing value for any of the months, the average
+        # for that month should be masked with a min_weight threshold of 100%.
+        result = ds.temporal.group_average("ts", "month", min_weight=0.55)
+        expected = ds.copy()
+        expected = expected.drop_dims("time")
+        expected["ts"] = xr.DataArray(
+            name="ts",
+            data=np.array([[[2.0]], [[np.nan]], [[1.0]], [[1.0]]]),
+            coords={
+                "lat": expected.lat,
+                "lon": expected.lon,
+                "time": xr.DataArray(
+                    data=np.array(
+                        [
+                            cftime.DatetimeGregorian(2000, 1, 1),
+                            cftime.DatetimeGregorian(2000, 2, 1),
+                            cftime.DatetimeGregorian(2000, 4, 1),
                             cftime.DatetimeGregorian(2001, 2, 1),
                         ],
                     ),

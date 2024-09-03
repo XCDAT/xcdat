@@ -19,11 +19,7 @@ from xcdat import bounds  # noqa: F401
 from xcdat._logger import _setup_custom_logger
 from xcdat.axis import get_dim_coords
 from xcdat.dataset import _get_data_var
-from xcdat.utils import (
-    _get_masked_weights,
-    _validate_min_weight,
-    mask_var_with_weight_threshold,
-)
+from xcdat.utils import _get_masked_weights, _validate_min_weight
 
 logger = _setup_custom_logger(__name__)
 
@@ -166,7 +162,6 @@ class TemporalAccessor:
         data_var: str,
         weighted: bool = True,
         keep_weights: bool = False,
-        min_weight: float | None = None,
     ):
         """
         Returns a Dataset with the average of a data variable and the time
@@ -208,10 +203,6 @@ class TemporalAccessor:
         keep_weights : bool, optional
             If calculating averages using weights, keep the weights in the
             final dataset output, by default False.
-        min_weight : float | None, optional
-            Fraction of data coverage (i..e, weight) needed to return a
-            spatial average value. Value must range from 0 to 1, by default None
-            (equivalent to ``min_weight=0.0``).
 
         Returns
         -------
@@ -252,7 +243,6 @@ class TemporalAccessor:
             freq,
             weighted=weighted,
             keep_weights=keep_weights,
-            min_weight=min_weight,
         )
 
     def group_average(
@@ -262,6 +252,7 @@ class TemporalAccessor:
         weighted: bool = True,
         keep_weights: bool = False,
         season_config: SeasonConfigInput = DEFAULT_SEASON_CONFIG,
+        min_weight: float | None = None,
     ):
         """Returns a Dataset with average of a data variable by time group.
 
@@ -340,6 +331,10 @@ class TemporalAccessor:
                 >>>     ["Jul", "Aug", "Sep"],  # "JulAugSep"
                 >>>     ["Oct", "Nov", "Dec"],  # "OctNovDec"
                 >>> ]
+        min_weight : float | None, optional
+            Fraction of data coverage (i..e, weight) needed to return a
+            temporal average value. Value must range from 0 to 1, by default
+            None ((equivalent to ``min_weight=0.0``).
 
         Returns
         -------
@@ -418,6 +413,7 @@ class TemporalAccessor:
             weighted=weighted,
             keep_weights=keep_weights,
             season_config=season_config,
+            min_weight=min_weight,
         )
 
     def climatology(
@@ -911,31 +907,36 @@ class TemporalAccessor:
     ):
         """Validates method arguments and sets them as object attributes.
 
-        Parameters
-        ----------
-        mode : Mode
-            The mode for temporal averaging.
-        freq : Frequency
-            The frequency of time to group by.
-        weighted : bool
-            Calculate averages using weights.
-        season_config: Optional[SeasonConfigInput]
-            A dictionary for "season" frequency configurations. If configs for
-            predefined seasons are passed, configs for custom seasons are
-            ignored and vice versa, by default DEFAULT_SEASON_CONFIG.
-        min_weight : float | None, optional
-            Fraction of data coverage (i..e, weight) needed to return a
-            spatial average value. Value must range from 0 to 1, by default None
-            (equivalent to ``min_weight=0.0``).
+                Parameters
+                ----------
+                mode : Mode
+                    The mode for temporal averaging.
+                freq : Frequency
+                    The frequency of time to group by.
+                weighted : bool
+                    Calculate averages using weights.
+                season_config: Optional[SeasonConfigInput]
+                    A dictionary for "season" frequency configurations. If configs for
+                    predefined seasons are passed, configs for custom seasons are
+                    ignored and vice versa, by default DEFAULT_SEASON_CONFIG.
+                min_weight : float | None, optional
+                    Fraction of data coverage (i..e, weight) needed to return a
+        <<<<<<< Updated upstream
+                    spatial average value. Value must range from 0 to 1, by default None
+                    (equivalent to ``min_weight=0.0``).
+        =======
+                    temporal average value. Value must range from 0 to 1, by default
+                    None ((equivalent to ``min_weight=0.0``).
+        >>>>>>> Stashed changes
 
-        Raises
-        ------
-        KeyError
-            If the Dataset does not have a time dimension.
-        ValueError
-            If an incorrect ``freq`` arg was passed.
-        ValueError
-            If an incorrect ``dec_mode`` arg was passed.
+                Raises
+                ------
+                KeyError
+                    If the Dataset does not have a time dimension.
+                ValueError
+                    If an incorrect ``freq`` arg was passed.
+                ValueError
+                    If an incorrect ``dec_mode`` arg was passed.
         """
         # General configuration attributes.
         if mode not in list(MODES):
@@ -1172,11 +1173,6 @@ class TemporalAccessor:
                 self._weights = self._get_weights(time_bounds)
 
                 dv = dv.weighted(self._weights).mean(dim=self.dim)
-
-                if self._min_weight > 0.0:
-                    dv = mask_var_with_weight_threshold(
-                        dv, self._weights, self._min_weight
-                    )
             else:
                 dv = dv.mean(dim=self.dim)
 
@@ -1210,34 +1206,44 @@ class TemporalAccessor:
             time_bounds = ds.bounds.get_bounds("T", var_key=data_var)
             self._weights = self._get_weights(time_bounds)
 
-            # Weight the data variable.
-            dv *= self._weights
-
-            # Perform weighted average using the formula
-            # WA = sum(data*weights) / sum(masked weights). The denominator must
-            # be included to take into account zero weight for missing data.
-            masked_weights = _get_masked_weights(dv, self._weights)
             with xr.set_options(keep_attrs=True):
-                dv = self._group_data(dv).sum() / self._group_data(masked_weights).sum()
+                dv_weighted = dv * self._weights
 
+                # Perform weighted average using the formula
+                # # WA = sum(data*weights) / sum(masked weights).
+                # The denominator must be included to take into account zero
+                # weight for missing data.
+                dv_group_sum = self._group_data(dv_weighted).sum()
+                weights_masked = _get_masked_weights(dv_weighted, self._weights)
+                weights_masked_group_sum = self._group_data(weights_masked).sum()
+
+                dv_avg = dv_group_sum / weights_masked_group_sum
+
+            # Mask the data variable values with weights below the minimum
+            # weight threshold (if specified).
             if self._min_weight > 0.0:
-                dv = mask_var_with_weight_threshold(dv, self._weights, self._min_weight)
+                dv_avg = xr.where(
+                    weights_masked_group_sum >= self._min_weight,
+                    dv_avg,
+                    np.nan,
+                    keep_attrs=True,
+                )
 
             # Restore the data variable's name.
-            dv.name = data_var
+            dv_avg.name = data_var
         else:
-            dv = self._group_data(dv).mean()
+            dv_avg = self._group_data(dv).mean()
 
         # After grouping and aggregating, the grouped time dimension's
         # attributes are removed. Xarray's `keep_attrs=True` option only keeps
         # attributes for data variables and not their coordinates, so the
         # coordinate attributes have to be restored manually.
-        dv[self.dim].attrs = self._labeled_time.attrs
-        dv[self.dim].encoding = self._labeled_time.encoding
+        dv_avg[self.dim].attrs = self._labeled_time.attrs
+        dv_avg[self.dim].encoding = self._labeled_time.encoding
 
-        dv = self._add_operation_attrs(dv)
+        dv_avg = self._add_operation_attrs(dv_avg)
 
-        return dv
+        return dv_avg
 
     def _get_weights(self, time_bounds: xr.DataArray) -> xr.DataArray:
         """Calculates weights for a data variable using time bounds.

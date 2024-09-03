@@ -174,7 +174,8 @@ def mask_var_with_weight_threshold(
     frac = weight_sum_masked / weight_sum_all
 
     # Nan out values that don't meet specified weight threshold.
-    dv_new = xr.where(frac >= min_weight, dv, np.nan)
+    dv_new = xr.where(frac >= min_weight, dv, np.nan, keep_attrs=True)
+    dv_new.name = dv.name
 
     return dv_new
 
@@ -196,8 +197,7 @@ def _get_masked_weights(dv: xr.DataArray, weights: xr.DataArray) -> xr.DataArray
     xr.DataArray
         The masked weights.
     """
-    masked_weights, _ = xr.broadcast(weights, dv)
-    masked_weights = xr.where(dv.copy().isnull(), 0.0, masked_weights)
+    masked_weights = xr.where(dv.copy().isnull(), 0.0, weights)
 
     return masked_weights
 
