@@ -334,7 +334,7 @@ class TemporalAccessor:
         min_weight : float | None, optional
             Fraction of data coverage (i..e, weight) needed to return a
             temporal average value. Value must range from 0 to 1, by default
-            None ((equivalent to ``min_weight=0.0``).
+            None (equivalent to ``min_weight=0.0``).
 
         Returns
         -------
@@ -907,36 +907,31 @@ class TemporalAccessor:
     ):
         """Validates method arguments and sets them as object attributes.
 
-                Parameters
-                ----------
-                mode : Mode
-                    The mode for temporal averaging.
-                freq : Frequency
-                    The frequency of time to group by.
-                weighted : bool
-                    Calculate averages using weights.
-                season_config: Optional[SeasonConfigInput]
-                    A dictionary for "season" frequency configurations. If configs for
-                    predefined seasons are passed, configs for custom seasons are
-                    ignored and vice versa, by default DEFAULT_SEASON_CONFIG.
-                min_weight : float | None, optional
-                    Fraction of data coverage (i..e, weight) needed to return a
-        <<<<<<< Updated upstream
-                    spatial average value. Value must range from 0 to 1, by default None
-                    (equivalent to ``min_weight=0.0``).
-        =======
-                    temporal average value. Value must range from 0 to 1, by default
-                    None ((equivalent to ``min_weight=0.0``).
-        >>>>>>> Stashed changes
+        Parameters
+        ----------
+        mode : Mode
+            The mode for temporal averaging.
+        freq : Frequency
+            The frequency of time to group by.
+        weighted : bool
+            Calculate averages using weights.
+        season_config: Optional[SeasonConfigInput]
+            A dictionary for "season" frequency configurations. If configs for
+            predefined seasons are passed, configs for custom seasons are
+            ignored and vice versa, by default DEFAULT_SEASON_CONFIG.
+        min_weight : float | None, optional
+            Fraction of data coverage (i..e, weight) needed to return a
+            temporal average value. Value must range from 0 to 1, by default
+            None (equivalent to ``min_weight=0.0``).
 
-                Raises
-                ------
-                KeyError
-                    If the Dataset does not have a time dimension.
-                ValueError
-                    If an incorrect ``freq`` arg was passed.
-                ValueError
-                    If an incorrect ``dec_mode`` arg was passed.
+        Raises
+        ------
+        KeyError
+            If the Dataset does not have a time dimension.
+        ValueError
+            If an incorrect ``freq`` arg was passed.
+        ValueError
+            If an incorrect ``dec_mode`` arg was passed.
         """
         # General configuration attributes.
         if mode not in list(MODES):
