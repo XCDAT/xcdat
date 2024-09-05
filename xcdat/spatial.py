@@ -12,6 +12,7 @@ from typing import (
     Hashable,
     List,
     Literal,
+    Optional,
     Tuple,
     TypedDict,
     Union,
@@ -267,7 +268,7 @@ class SpatialAccessor:
         and pressure).
         """
         Bounds = TypedDict(
-            "Bounds", {"weights_method": Callable, "region": np.ndarray | None}
+            "Bounds", {"weights_method": Callable, "region": Optional[np.ndarray]}
         )
 
         axis_bounds: Dict[SpatialAxis, Bounds] = {
