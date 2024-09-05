@@ -1,5 +1,8 @@
 """Module containing geospatial averaging functions."""
+<<<<<<< HEAD
 
+=======
+>>>>>>> 34b570d6 (Updates from code review)
 from __future__ import annotations
 
 from functools import reduce
@@ -9,7 +12,6 @@ from typing import (
     Hashable,
     List,
     Literal,
-    Optional,
     Tuple,
     TypedDict,
     Union,
@@ -27,7 +29,11 @@ from xcdat.axis import (
     get_dim_keys,
 )
 from xcdat.dataset import _get_data_var
-from xcdat.utils import _if_multidim_dask_array_then_load
+from xcdat.utils import (
+    _get_masked_weights,
+    _if_multidim_dask_array_then_load,
+    _validate_min_weight,
+)
 
 #: Type alias for a dictionary of axis keys mapped to their bounds.
 AxisWeights = Dict[Hashable, xr.DataArray]
@@ -74,9 +80,9 @@ class SpatialAccessor:
         axis: List[SpatialAxis] | Tuple[SpatialAxis, ...] = ("X", "Y"),
         weights: Union[Literal["generate"], xr.DataArray] = "generate",
         keep_weights: bool = False,
-        lat_bounds: Optional[RegionAxisBounds] = None,
-        lon_bounds: Optional[RegionAxisBounds] = None,
-        minimum_weight: Optional[float] = None,
+        lat_bounds: RegionAxisBounds | None = None,
+        lon_bounds: RegionAxisBounds | None = None,
+        min_weight: float | None = None,
     ) -> xr.Dataset:
         """
         Calculates the spatial average for a rectilinear grid over an optionally
@@ -115,21 +121,21 @@ class SpatialAccessor:
         keep_weights : bool, optional
             If calculating averages using weights, keep the weights in the
             final dataset output, by default False.
-        lat_bounds : Optional[RegionAxisBounds], optional
+        lat_bounds : RegionAxisBounds | None, optional
             A tuple of floats/ints for the regional latitude lower and upper
             boundaries. This arg is used when calculating axis weights, but is
             ignored if ``weights`` are supplied. The lower bound cannot be
             larger than the upper bound, by default None.
-        lon_bounds : Optional[RegionAxisBounds], optional
+        lon_bounds : RegionAxisBounds | None, optional
             A tuple of floats/ints for the regional longitude lower and upper
             boundaries. This arg is used when calculating axis weights, but is
             ignored if ``weights`` are supplied. The lower bound can be larger
             than the upper bound (e.g., across the prime meridian, dateline), by
             default None.
-        minimum_weight : optional, float
-            Fraction of data coverage (i..e, weight) needed to return a
+        min_weight : optional, float
+            Fraction of data coverage (i.e, weight) needed to return a
             spatial average value. Value must range from 0 to 1, by default None
-            (equivalent to minimum_weight=0.0).
+            (equivalent to ``min_weight=0.0``).
 
         Returns
         -------
@@ -189,7 +195,9 @@ class SpatialAccessor:
         """
         ds = self._dataset.copy()
         dv = _get_data_var(ds, data_var)
+
         self._validate_axis_arg(axis)
+        min_weight = _validate_min_weight(min_weight)
 
         if isinstance(weights, str) and weights == "generate":
             if lat_bounds is not None:
@@ -201,7 +209,7 @@ class SpatialAccessor:
             self._weights = weights
 
         self._validate_weights(dv, axis)
-        ds[dv.name] = self._averager(dv, axis, minimum_weight=minimum_weight)
+        ds[dv.name] = self._averager(dv, axis, min_weight=min_weight)
 
         if keep_weights:
             ds[self._weights.name] = self._weights
@@ -211,9 +219,9 @@ class SpatialAccessor:
     def get_weights(
         self,
         axis: List[SpatialAxis] | Tuple[SpatialAxis, ...],
-        lat_bounds: Optional[RegionAxisBounds] = None,
-        lon_bounds: Optional[RegionAxisBounds] = None,
-        data_var: Optional[str] = None,
+        lat_bounds: RegionAxisBounds | None = None,
+        lon_bounds: RegionAxisBounds | None = None,
+        data_var: str | None = None,
     ) -> xr.DataArray:
         """
         Get area weights for specified axis keys and an optional target domain.
@@ -232,13 +240,13 @@ class SpatialAccessor:
         ----------
         axis : List[SpatialAxis] | Tuple[SpatialAxis, ...]
             List of axis dimensions to average over.
-        lat_bounds : Optional[RegionAxisBounds]
+        lat_bounds : RegionAxisBounds | None
             Tuple of latitude boundaries for regional selection, by default
             None.
-        lon_bounds : Optional[RegionAxisBounds]
+        lon_bounds : RegionAxisBounds | None
             Tuple of longitude boundaries for regional selection, by default
             None.
-        data_var: Optional[str]
+        data_var: str | None
             The key of the data variable, by default None. Pass this argument
             when the dataset has more than one bounds per axis (e.g., "lon"
             and "zlon_bnds" for the "X" axis), or you want weights for a
@@ -259,7 +267,7 @@ class SpatialAccessor:
         and pressure).
         """
         Bounds = TypedDict(
-            "Bounds", {"weights_method": Callable, "region": Optional[np.ndarray]}
+            "Bounds", {"weights_method": Callable, "region": np.ndarray | None}
         )
 
         axis_bounds: Dict[SpatialAxis, Bounds] = {
@@ -382,7 +390,7 @@ class SpatialAccessor:
             )
 
     def _get_longitude_weights(
-        self, domain_bounds: xr.DataArray, region_bounds: Optional[np.ndarray]
+        self, domain_bounds: xr.DataArray, region_bounds: np.ndarray | None
     ) -> xr.DataArray:
         """Gets weights for the longitude axis.
 
@@ -409,7 +417,7 @@ class SpatialAccessor:
         ----------
         domain_bounds : xr.DataArray
             The array of bounds for the longitude domain.
-        region_bounds : Optional[np.ndarray]
+        region_bounds : np.ndarray | None
             The array of bounds for longitude regional selection.
 
         Returns
@@ -423,7 +431,7 @@ class SpatialAccessor:
             If the there are multiple instances in which the
             domain_bounds[:, 0] > domain_bounds[:, 1]
         """
-        p_meridian_index: Optional[np.ndarray] = None
+        p_meridian_index: np.ndarray | None = None
         d_bounds = domain_bounds.copy()
 
         pm_cells = np.where(domain_bounds[:, 1] - domain_bounds[:, 0] < 0)[0]
@@ -455,7 +463,7 @@ class SpatialAccessor:
         return weights
 
     def _get_latitude_weights(
-        self, domain_bounds: xr.DataArray, region_bounds: Optional[np.ndarray]
+        self, domain_bounds: xr.DataArray, region_bounds: np.ndarray | None
     ) -> xr.DataArray:
         """Gets weights for the latitude axis.
 
@@ -467,7 +475,7 @@ class SpatialAccessor:
         ----------
         domain_bounds : xr.DataArray
             The array of bounds for the latitude domain.
-        region_bounds : Optional[np.ndarray]
+        region_bounds : np.ndarray | None
             The array of bounds for latitude regional selection.
 
         Returns
@@ -710,7 +718,7 @@ class SpatialAccessor:
         self,
         data_var: xr.DataArray,
         axis: List[SpatialAxis] | Tuple[SpatialAxis, ...],
-        minimum_weight: Optional[float] = None,
+        min_weight: float,
     ):
         """Perform a weighted average of a data variable.
 
@@ -729,10 +737,9 @@ class SpatialAccessor:
             Data variable inside a Dataset.
         axis : List[SpatialAxis] | Tuple[SpatialAxis, ...]
             List of axis dimensions to average over.
-        minimum_weight : optional, float
-            Fraction of data coverage (i..e, weight) needed to return a
-            spatial average value. Value must range from 0 to 1, by default None
-            (equivalent to minimum_weight=0.0).
+        min_weight : float
+            Fraction of data coverage (i.e, weight) needed to return a
+            spatial average value. Value must range from 0 to 1.
 
         Returns
         -------
@@ -746,45 +753,68 @@ class SpatialAccessor:
         """
         weights = self._weights.fillna(0)
 
-        # ensure required weight is between 0 and 1
-        if minimum_weight is None:
-            minimum_weight = 0.0
-        elif minimum_weight < 0.0:
-            raise ValueError(
-                "minimum_weight argument is less than 0. "
-                "minimum_weight must be between 0 and 1."
-            )
-        elif minimum_weight > 1.0:
-            raise ValueError(
-                "minimum_weight argument is greater than 1. "
-                "minimum_weight must be between 0 and 1."
-            )
-
-        # need weights to match data_var dimensionality
-        if minimum_weight > 0.0:
+        # TODO: This conditional might not be needed because Xarray will
+        # automatically broadcast the weights to the data variable for
+        # operations such as .mean() and .where().
+        if min_weight > 0.0:
             weights, data_var = xr.broadcast(weights, data_var)
 
-        # get averaging dimensions
-        dim = []
+        dim: List[str] = []
         for key in axis:
-            dim.append(get_dim_keys(data_var, key))
+            dim.append(get_dim_keys(data_var, key))  # type: ignore
 
-        # compute weighed mean
         with xr.set_options(keep_attrs=True):
-            weighted_mean = data_var.cf.weighted(weights).mean(dim=dim)
+            dv_mean = data_var.cf.weighted(weights).mean(dim=dim)
 
-        # if weight thresholds applied, calculate fraction of data availability
-        # replace values that do not meet minimum weight with nan
-        if minimum_weight > 0.0:
-            # sum all weights (assuming no missing values exist)
-            weight_sum_all = weights.sum(dim=dim)  # type: ignore
-            # zero out cells with missing values in data_var
-            weights = xr.where(~np.isnan(data_var), weights, 0)
-            # sum all weights (including zero for missing values)
-            weight_sum_masked = weights.sum(dim=dim)  # type: ignore
-            # get fraction of weight available
-            frac = weight_sum_masked / weight_sum_all
-            # nan out values that don't meet specified weight threshold
-            weighted_mean = xr.where(frac >= minimum_weight, weighted_mean, np.nan)
+        if min_weight > 0.0:
+            dv_mean = self._mask_var_with_weight_threshold(
+                dv_mean, dim, weights, min_weight
+            )
 
-        return weighted_mean
+        return dv_mean
+
+    def _mask_var_with_weight_threshold(
+        self, dv: xr.DataArray, dim: List[str], weights: xr.DataArray, min_weight: float
+    ) -> xr.DataArray:
+        """Mask values that do not meet the minimum weight threshold with np.nan.
+
+        This function is useful for cases where the weighting of data might be
+        skewed based on the availability of data. For example, if a portion of
+        cells in a region has significantly more missing data than other other
+        regions, it can result in inaccurate calculations of spatial averaging.
+        Masking values that do not meet the minimum weight threshold ensures
+        more accurate calculations.
+
+        Parameters
+        ----------
+        dv : xr.DataArray
+            The weighted variable.
+        dim: List[str]:
+            List of axis dimensions to average over.
+        weights : xr.DataArray
+            A DataArray containing either the regional weights used for weighted
+            averaging. ``weights`` must include the same axis dimensions and
+            dimensional sizes as the data variable.
+        min_weight : float
+            Fraction of data coverage (i.e, weight) needed to return a
+            spatial average value. Value must range from 0 to 1.
+
+        Returns
+        -------
+        xr.DataArray
+            The variable with the minimum weight threshold applied.
+        """
+        # Sum all weights, including zero for missing values.
+        weight_sum_all = weights.sum(dim=dim)
+
+        masked_weights = _get_masked_weights(dv, weights)
+        weight_sum_masked = masked_weights.sum(dim=dim)
+
+        # Get fraction of the available weight.
+        frac = weight_sum_masked / weight_sum_all
+
+        # Nan out values that don't meet specified weight threshold.
+        dv_new = xr.where(frac >= min_weight, dv, np.nan, keep_attrs=True)
+        dv_new.name = dv.name
+
+        return dv_new

@@ -140,16 +140,16 @@ class TestAverage:
         with pytest.raises(ValueError):
             self.ds.spatial.average("ts", axis=["X", "Y"], weights=weights)
 
-    def test_raises_error_if_minimum_weight_not_between_zero_and_one(
+    def test_raises_error_if_min_weight_not_between_zero_and_one(
         self,
     ):
-        # ensure error if minimum_weight less than zero
+        # ensure error if min_weight less than zero
         with pytest.raises(ValueError):
-            self.ds.spatial.average("ts", axis=["X", "Y"], minimum_weight=-0.01)
+            self.ds.spatial.average("ts", axis=["X", "Y"], min_weight=-0.01)
 
-        # ensure error if minimum_weight greater than 1
+        # ensure error if min_weight greater than 1
         with pytest.raises(ValueError):
-            self.ds.spatial.average("ts", axis=["X", "Y"], minimum_weight=1.01)
+            self.ds.spatial.average("ts", axis=["X", "Y"], min_weight=1.01)
 
     def test_spatial_average_for_lat_region_and_keep_weights(self):
         ds = self.ds.copy()
@@ -265,7 +265,7 @@ class TestAverage:
 
         xr.testing.assert_allclose(result, expected)
 
-    def test_spatial_average_with_minimum_weight(self):
+    def test_spatial_average_with_min_weight(self):
         ds = self.ds.copy()
 
         # insert a nan
@@ -276,7 +276,7 @@ class TestAverage:
             axis=["X", "Y"],
             lat_bounds=(-5.0, 5),
             lon_bounds=(-170, -120.1),
-            minimum_weight=1.0,
+            min_weight=1.0,
         )
 
         expected = self.ds.copy()
@@ -288,7 +288,7 @@ class TestAverage:
 
         xr.testing.assert_allclose(result, expected)
 
-    def test_spatial_average_with_minimum_weight_as_None(self):
+    def test_spatial_average_with_min_weight_as_None(self):
         ds = self.ds.copy()
 
         result = ds.spatial.average(
@@ -296,7 +296,7 @@ class TestAverage:
             axis=["X", "Y"],
             lat_bounds=(-5.0, 5),
             lon_bounds=(-170, -120.1),
-            minimum_weight=None,
+            min_weight=None,
         )
 
         expected = self.ds.copy()
