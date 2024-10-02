@@ -1,4 +1,6 @@
 """Module containing temporal functions."""
+from __future__ import annotations
+
 from datetime import datetime
 from itertools import chain
 from typing import Dict, List, Literal, Optional, Tuple, TypedDict, Union, get_args
@@ -17,6 +19,7 @@ from xcdat import bounds  # noqa: F401
 from xcdat._logger import _setup_custom_logger
 from xcdat.axis import get_dim_coords
 from xcdat.dataset import _get_data_var
+from xcdat.utils import _get_masked_weights, _validate_min_weight
 
 logger = _setup_custom_logger(__name__)
 
@@ -154,7 +157,12 @@ class TemporalAccessor:
     def __init__(self, dataset: xr.Dataset):
         self._dataset: xr.Dataset = dataset
 
-    def average(self, data_var: str, weighted: bool = True, keep_weights: bool = False):
+    def average(
+        self,
+        data_var: str,
+        weighted: bool = True,
+        keep_weights: bool = False,
+    ):
         """
         Returns a Dataset with the average of a data variable and the time
         dimension removed.
@@ -230,7 +238,11 @@ class TemporalAccessor:
         freq = _infer_freq(self._dataset[self.dim])
 
         return self._averager(
-            data_var, "average", freq, weighted=weighted, keep_weights=keep_weights
+            data_var,
+            "average",
+            freq,
+            weighted=weighted,
+            keep_weights=keep_weights,
         )
 
     def group_average(
@@ -240,6 +252,7 @@ class TemporalAccessor:
         weighted: bool = True,
         keep_weights: bool = False,
         season_config: SeasonConfigInput = DEFAULT_SEASON_CONFIG,
+        min_weight: float | None = None,
     ):
         """Returns a Dataset with average of a data variable by time group.
 
@@ -318,6 +331,10 @@ class TemporalAccessor:
                 >>>     ["Jul", "Aug", "Sep"],  # "JulAugSep"
                 >>>     ["Oct", "Nov", "Dec"],  # "OctNovDec"
                 >>> ]
+        min_weight : float | None, optional
+            Fraction of data coverage (i..e, weight) needed to return a
+            temporal average value. Value must range from 0 to 1, by default
+            None (equivalent to ``min_weight=0.0``).
 
         Returns
         -------
@@ -396,6 +413,7 @@ class TemporalAccessor:
             weighted=weighted,
             keep_weights=keep_weights,
             season_config=season_config,
+            min_weight=min_weight,
         )
 
     def climatology(
@@ -798,10 +816,13 @@ class TemporalAccessor:
         keep_weights: bool = False,
         reference_period: Optional[Tuple[str, str]] = None,
         season_config: SeasonConfigInput = DEFAULT_SEASON_CONFIG,
+        min_weight: float | None = None,
     ) -> xr.Dataset:
         """Averages a data variable based on the averaging mode and frequency."""
         ds = self._dataset.copy()
-        self._set_arg_attrs(mode, freq, weighted, reference_period, season_config)
+        self._set_arg_attrs(
+            mode, freq, weighted, reference_period, season_config, min_weight
+        )
 
         # Preprocess the dataset based on method argument values.
         ds = self._preprocess_dataset(ds)
@@ -882,6 +903,7 @@ class TemporalAccessor:
         weighted: bool,
         reference_period: Optional[Tuple[str, str]] = None,
         season_config: SeasonConfigInput = DEFAULT_SEASON_CONFIG,
+        min_weight: float | None = None,
     ):
         """Validates method arguments and sets them as object attributes.
 
@@ -897,6 +919,10 @@ class TemporalAccessor:
             A dictionary for "season" frequency configurations. If configs for
             predefined seasons are passed, configs for custom seasons are
             ignored and vice versa, by default DEFAULT_SEASON_CONFIG.
+        min_weight : float | None, optional
+            Fraction of data coverage (i..e, weight) needed to return a
+            temporal average value. Value must range from 0 to 1, by default
+            None (equivalent to ``min_weight=0.0``).
 
         Raises
         ------
@@ -924,6 +950,7 @@ class TemporalAccessor:
         self._mode = mode
         self._freq = freq
         self._weighted = weighted
+        self._min_weight = _validate_min_weight(min_weight)
 
         self._reference_period = None
         if reference_period is not None:
@@ -1178,37 +1205,44 @@ class TemporalAccessor:
             time_bounds = ds.bounds.get_bounds("T", var_key=data_var)
             self._weights = self._get_weights(time_bounds)
 
-            # Weight the data variable.
-            dv *= self._weights
-
-            # Ensure missing data (`np.nan`) receives no weight (zero). To
-            # achieve this, first broadcast the one-dimensional (temporal
-            # dimension) shape of the `weights` DataArray to the
-            # multi-dimensional shape of its corresponding data variable.
-            weights, _ = xr.broadcast(self._weights, dv)
-            weights = xr.where(dv.copy().isnull(), 0.0, weights)
-
-            # Perform weighted average using the formula
-            # WA = sum(data*weights) / sum(weights). The denominator must be
-            # included to take into account zero weight for missing data.
             with xr.set_options(keep_attrs=True):
-                dv = self._group_data(dv).sum() / self._group_data(weights).sum()
+                dv_weighted = dv * self._weights
+
+                # Perform weighted average using the formula
+                # # WA = sum(data*weights) / sum(masked weights).
+                # The denominator must be included to take into account zero
+                # weight for missing data.
+                dv_group_sum = self._group_data(dv_weighted).sum()
+                weights_masked = _get_masked_weights(dv_weighted, self._weights)
+                weights_masked_group_sum = self._group_data(weights_masked).sum()
+
+                dv_avg = dv_group_sum / weights_masked_group_sum
+
+            # Mask the data variable values with weights below the minimum
+            # weight threshold (if specified).
+            if self._min_weight > 0.0:
+                dv_avg = xr.where(
+                    weights_masked_group_sum >= self._min_weight,
+                    dv_avg,
+                    np.nan,
+                    keep_attrs=True,
+                )
 
             # Restore the data variable's name.
-            dv.name = data_var
+            dv_avg.name = data_var
         else:
-            dv = self._group_data(dv).mean()
+            dv_avg = self._group_data(dv).mean()
 
         # After grouping and aggregating, the grouped time dimension's
         # attributes are removed. Xarray's `keep_attrs=True` option only keeps
         # attributes for data variables and not their coordinates, so the
         # coordinate attributes have to be restored manually.
-        dv[self.dim].attrs = self._labeled_time.attrs
-        dv[self.dim].encoding = self._labeled_time.encoding
+        dv_avg[self.dim].attrs = self._labeled_time.attrs
+        dv_avg[self.dim].encoding = self._labeled_time.encoding
 
-        dv = self._add_operation_attrs(dv)
+        dv_avg = self._add_operation_attrs(dv_avg)
 
-        return dv
+        return dv_avg
 
     def _get_weights(self, time_bounds: xr.DataArray) -> xr.DataArray:
         """Calculates weights for a data variable using time bounds.
