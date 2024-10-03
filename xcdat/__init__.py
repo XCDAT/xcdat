@@ -1,5 +1,6 @@
 """Top-level package for xcdat."""
 
+from xcdat import tutorial  # noqa: F401
 from xcdat.axis import (  # noqa: F401
     center_times,
     get_dim_coords,
@@ -19,7 +20,6 @@ from xcdat.regridder.grid import (  # noqa: F401
 )
 from xcdat.spatial import SpatialAccessor  # noqa: F401
 from xcdat.temporal import TemporalAccessor  # noqa: F401
-from xcdat.tutorial import load_dataset  # noqa: F401
 from xcdat.utils import compare_datasets  # noqa: F401
 
 __version__ = "0.7.3"
