@@ -180,6 +180,28 @@ class TestAverage:
 
         assert result.identical(expected)
 
+    def test_spatial_average_for_lat_region_and_skipna(self):
+        ds = self.ds.copy(deep=True)
+        ds.ts[0] = np.nan
+
+        # Specifying axis as a str instead of list of str.
+        result = ds.spatial.average("ts", axis=["Y"], lat_bounds=(-5.0, 5), skipna=True)
+
+        expected = self.ds.copy()
+        expected["ts"] = xr.DataArray(
+            data=np.array(
+                [
+                    [np.nan, np.nan, np.nan, np.nan],
+                    [1.0, 1.0, 1.0, 1.0],
+                    [1.0, 1.0, 1.0, 1.0],
+                ]
+            ),
+            coords={"time": expected.time, "lon": expected.lon},
+            dims=["time", "lon"],
+        )
+
+        assert result.identical(expected)
+
     def test_spatial_average_for_domain_wrapping_p_meridian_non_cf_conventions(
         self,
     ):
