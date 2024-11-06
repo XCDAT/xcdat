@@ -641,6 +641,13 @@ class BoundsAccessor:
             # Determine the daily frequency for generating time bounds.
             if daily_subfreq is None:
                 diff = time.values[1] - time.values[0]
+
+                # Arrays with `dtype="timedelta64[ns]"` must be converted to
+                # pandas timedelta objects in order to access the `.seconds`
+                # time component.
+                if isinstance(diff, np.timedelta64):
+                    diff = pd.to_timedelta(diff)
+
                 hrs = diff.seconds / 3600
                 daily_subfreq = int(24 / hrs)  # type: ignore
 
