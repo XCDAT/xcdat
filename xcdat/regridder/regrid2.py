@@ -238,11 +238,24 @@ def _build_dataset(
     output_coords: dict[str, xr.DataArray] = {}
     output_data_vars: dict[str, xr.DataArray] = {}
 
-    dims = list(input_data_var.dims)
+    for dim in input_data_var.dims:
+        dim = str(dim)
+
+        try:
+            axis_name = [x for x, y in ds.cf.axes.items() if dim in y][0]
+        except Exception:
+            raise ValueError(
+                f"Could not determine axis name for dimension {dim}"
+            ) from None
+
+        if axis_name in ["X", "Y"]:
+            output_coords[dim] = output_grid.cf[axis_name]
+        else:
+            output_coords[dim] = input_data_var.cf[axis_name]
 
     output_da = xr.DataArray(
         output_data,
-        dims=dims,
+        dims=input_data_var.dims,
         coords=output_coords,
         attrs=ds[data_var].attrs.copy(),
         name=data_var,
