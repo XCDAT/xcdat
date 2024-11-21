@@ -1,8 +1,5 @@
 """Module containing geospatial averaging functions."""
-<<<<<<< HEAD
 
-=======
->>>>>>> 34b570d6 (Updates from code review)
 from __future__ import annotations
 
 from functools import reduce
