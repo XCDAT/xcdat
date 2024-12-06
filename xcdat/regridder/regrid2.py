@@ -4,12 +4,8 @@ import numpy as np
 import xarray as xr
 
 import xcdat as xc
-from xcdat.axis import VAR_NAME_MAP, get_dim_keys
+from xcdat.axis import get_dim_keys
 from xcdat.regridder.base import BaseRegridder, _preserve_bounds
-
-# Spatial axes keys used to map to the axes in an input data variable to build
-# the output variable.
-VALID_SPATIAL_AXES_KEYS = ["X", "Y"] + VAR_NAME_MAP["X"] + VAR_NAME_MAP["Y"]
 
 
 class Regrid2Regridder(BaseRegridder):
