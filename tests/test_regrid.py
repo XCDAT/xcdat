@@ -517,18 +517,6 @@ class TestRegrid2Regridder:
         with pytest.raises(KeyError):
             regridder.horizontal("unknown", self.coarse_2d_ds)
 
-    def test_raises_error_if_axis_name_for_dim_cannot_be_determined(self):
-        ds = self.coarse_2d_ds.copy()
-        ds["lat"].attrs["standard_name"] = "latitude"
-        ds["lat"].attrs.pop("axis")
-
-        regridder = regrid2.Regrid2Regridder(ds, self.fine_2d_ds)
-
-        with pytest.raises(
-            ValueError, match="Could not determine axis name for dimension"
-        ):
-            regridder.horizontal("ts", ds)
-
     @pytest.mark.filterwarnings("ignore:.*invalid value.*true_divide.*:RuntimeWarning")
     def test_regrid_input_mask(self):
         regridder = regrid2.Regrid2Regridder(self.coarse_2d_ds, self.fine_2d_ds)
