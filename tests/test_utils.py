@@ -1,7 +1,7 @@
 import pytest
 import xarray as xr
 
-from xcdat.utils import compare_datasets, str_to_bool
+from xcdat.utils import _validate_min_weight, compare_datasets, str_to_bool
 
 
 class TestCompareDatasets:
@@ -103,3 +103,23 @@ class TestStrToBool:
 
         with pytest.raises(ValueError):
             str_to_bool("1")
+
+
+class TestValidateMinWeight:
+    def test_pass_None_returns_0(self):
+        result = _validate_min_weight(None)
+
+        assert result == 0
+
+    def test_returns_error_if_less_than_0(self):
+        with pytest.raises(ValueError):
+            _validate_min_weight(-1)
+
+    def test_returns_error_if_greater_than_1(self):
+        with pytest.raises(ValueError):
+            _validate_min_weight(1.1)
+
+    def test_returns_valid_min_weight(self):
+        result = _validate_min_weight(1)
+
+        assert result == 1
