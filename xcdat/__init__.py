@@ -1,5 +1,6 @@
 """Top-level package for xcdat."""
 
+from xcdat import tutorial  # noqa: F401
 from xcdat.axis import (  # noqa: F401
     center_times,
     get_dim_coords,
