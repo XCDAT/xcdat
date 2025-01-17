@@ -66,7 +66,7 @@ Instructions
 
    We recommend using the Conda environment creation procedure to install ``xcdat``.
    The advantage with following this approach is that Conda will attempt to resolve
-   dependencies (e.g. ``python >= 3.9``) for compatibility.
+   dependencies for compatibility.
 
    To create an ``xcdat`` Conda environment, run:
 

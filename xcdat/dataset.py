@@ -652,7 +652,7 @@ def _get_cftime_coords(offsets: np.ndarray, units: str, calendar: str) -> np.nda
 
     # Convert offsets to `np.float64` to avoid "TypeError: unsupported type
     # for timedelta days component: numpy.int64".
-    flat_offsets = flat_offsets.astype("float")
+    flat_offsets = flat_offsets.astype("float")  # type: ignore
 
     # We don't need to do calendar arithmetic here because the units and
     # offsets are in "months" or "years", which means leap days should not

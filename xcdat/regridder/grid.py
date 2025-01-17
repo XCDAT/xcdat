@@ -140,7 +140,7 @@ def _create_gaussian_axis(nlats: int) -> Tuple[xr.DataArray, xr.DataArray]:
         },
     )
 
-    bounds = (180.0 / np.pi) * np.arcsin(bounds)
+    bounds = (180.0 / np.pi) * np.arcsin(bounds)  # type: ignore
 
     bounds_data = np.zeros((points.shape[0], 2))
     bounds_data[:, 0] = bounds[:-1]
