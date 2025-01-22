@@ -34,6 +34,7 @@ Below is a list of top-level API functions that are available in ``xcdat``.
     create_grid
     create_uniform_grid
     create_zonal_grid
+    tutorial.open_dataset
 
 Accessors
 ---------

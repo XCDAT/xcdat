@@ -32,6 +32,7 @@ dependencies:
     - pandoc
     - ipython # Required for nbsphinx syntax highlighting
     - gsw-xarray # Required for vertical regridding example
+    - pooch # Required for xarray tutorial data
     # Quality Assurance
     # ==================
     - types-python-dateutil
