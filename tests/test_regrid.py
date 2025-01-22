@@ -664,10 +664,10 @@ class TestRegrid2Regridder:
             [[0.29289322]],
         ]
 
-        for x, y in zip(mapping, expected_mapping):
+        for x, y in zip(mapping, expected_mapping, strict=False):
             np.testing.assert_allclose(x, y)
 
-        for x2, y2 in zip(weights, expected_weigths):
+        for x2, y2 in zip(weights, expected_weigths, strict=False):
             np.testing.assert_allclose(x2, y2)
 
     def test_map_latitude_fine_to_coarse(self):
